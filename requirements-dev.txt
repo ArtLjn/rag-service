@@ -1,0 +1,18 @@
+# rag-service 开发/测试依赖
+# 安装：pip install -r requirements-dev.txt（会自动带 requirements.txt 的运行时依赖）
+
+-r requirements.txt
+
+# ---- 测试 ----
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=5.0.0                   # 覆盖率（pyproject [tool.coverage] 配套）
+respx>=0.21.0                       # mock httpx（HyDE/MinerU/Jina 单测）
+
+# ---- 静态检查 ----
+ruff>=0.6.0                         # lint + format
+
+# ---- 公式 LaTeX 校验（可选，毕设 P2 公式等价匹配用） ----
+# 安装后启用 FORMULA_VALIDATION_ENABLED=true
+# sympy>=1.12
+# latex2sympy2>=1.0.0

@@ -1,0 +1,68 @@
+[project]
+name = "rag-service"
+version = "0.1.0"
+description = "RAG as an independent service: PDF parsing, hybrid retrieval, and Cross-Encoder reranking."
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.4.0",
+  "qdrant-client>=1.11.0",
+  "sentence-transformers>=3.0.0",
+  "PyMuPDF>=1.24.0",
+  "pytesseract>=0.3.10",
+  "rank-bm25>=0.2.2",
+  "jieba>=0.42.1",
+  "httpx>=0.27.0",
+  "loguru>=0.7.2",
+  "pillow>=10.0.0",
+  "numpy>=1.26.0",
+  "python-multipart>=0.0.9",
+  "jinja2>=3.1.0",
+  "onnxruntime>=1.17.0",
+  "flashrank>=0.1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "pytest-cov>=5.0.0",
+  "ruff>=0.6.0",
+  "respx>=0.21.0",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+  "integration: end-to-end tests requiring live Qdrant",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N"]
+ignore = [
+  "E501",
+  "B008",  # FastAPI Form/File 默认值
+  "N818",  # 异常命名后缀（保留 ParseFailed 等业务名）
+  "UP042",  # str+Enum → StrEnum（Python 3.11+ 推荐，但批量改动风险大）
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/evaluation/*"]

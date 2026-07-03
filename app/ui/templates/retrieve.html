@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">检索调试器</h1>
+
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+  <form id="retrieve-form" class="space-y-4">
+    <div>
+      <label class="block text-xs uppercase text-slate-500 mb-1">query</label>
+      <input type="text" id="query" name="query" required
+        class="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        placeholder="例如：紧急工单多久响应">
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">collection</label>
+        <select id="collection" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+          {% for c in collections %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
+          {% if not collections %}<option value="">（无 collection）</option>{% endif %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">mode</label>
+        <select id="mode" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+          <option value="hybrid">hybrid</option>
+          <option value="vector">vector</option>
+          <option value="bm25">bm25</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">top_k</label>
+        <input type="number" id="top_k" value="10" min="1" max="100"
+          class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs uppercase text-slate-500 mb-1">use_hyde</label>
+        <select id="use_hyde" class="w-full border border-slate-300 rounded px-3 py-2 text-sm">
+          <option value="false">false</option>
+          <option value="true">true</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-indigo-700">检索</button>
+      <button type="button" id="rerank-btn" class="border border-slate-300 text-slate-700 px-4 py-2 rounded text-sm font-medium hover:bg-slate-50">对结果重排</button>
+    </div>
+  </form>
+</div>
+
+<div id="result-area" class="hidden">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-lg font-semibold">结果 <span id="result-count" class="text-sm text-slate-500 font-normal"></span></h2>
+    <div id="result-meta" class="text-xs text-slate-500"></div>
+  </div>
+  <div id="result-list" class="space-y-3"></div>
+</div>
+
+<div id="error-area" class="hidden bg-red-50 border border-red-200 text-red-700 rounded p-4 text-sm"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const form = document.getElementById('retrieve-form');
+const resultArea = document.getElementById('result-area');
+const errorArea = document.getElementById('error-area');
+let lastResults = [];
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function renderResults(data) {
+  lastResults = data.data.results || [];
+  document.getElementById('result-count').textContent = `· ${lastResults.length} 条`;
+  const meta = [`actual_mode=${data.data.actual_mode}`];
+  if (data.warning) meta.push(`<span class="text-amber-600">warning=${escapeHtml(data.warning)}</span>`);
+  document.getElementById('result-meta').innerHTML = meta.join(' · ');
+
+  const list = document.getElementById('result-list');
+  list.innerHTML = lastResults.map((r, i) => `
+    <div class="bg-white rounded-lg shadow border border-slate-100 p-4">
+      <div class="flex items-center gap-3 text-xs text-slate-500 mb-2 flex-wrap">
+        <span class="text-indigo-600 font-mono">#${i+1}</span>
+        <span>score <strong class="text-slate-800">${r.score.toFixed(4)}</strong></span>
+        <span class="badge badge-${r.metadata.category}">${r.metadata.category}</span>
+        ${r.metadata.page ? `<span>page ${r.metadata.page}</span>` : ''}
+        <span>chunk ${r.chunk_index}</span>
+        ${r.metadata.heading_path && r.metadata.heading_path.length ? `<span class="text-slate-400">/</span>${r.metadata.heading_path.map(h=>escapeHtml(h)).join(' › ')}` : ''}
+        <span class="ml-auto font-mono text-[10px] text-slate-400">${escapeHtml(r.doc_id || '')}:${r.chunk_index}</span>
+      </div>
+      <div class="text-sm whitespace-pre-wrap break-words">${escapeHtml(r.content)}</div>
+    </div>
+  `).join('');
+  resultArea.classList.remove('hidden');
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorArea.classList.add('hidden');
+  resultArea.classList.add('hidden');
+  const body = {
+    query: document.getElementById('query').value,
+    collection: document.getElementById('collection').value,
+    mode: document.getElementById('mode').value,
+    top_k: parseInt(document.getElementById('top_k').value, 10),
+    use_hyde: document.getElementById('use_hyde').value === 'true',
+  };
+  if (!body.collection) {
+    errorArea.textContent = '请先创建 collection';
+    errorArea.classList.remove('hidden');
+    return;
+  }
+  try {
+    const resp = await fetch('/retrieve', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const data = await resp.json();
+    if (!resp.ok || data.code !== 'OK') {
+      throw new Error(data.message || `HTTP ${resp.status}`);
+    }
+    renderResults(data);
+  } catch (err) {
+    errorArea.textContent = '检索失败：' + err.message;
+    errorArea.classList.remove('hidden');
+  }
+});
+
+document.getElementById('rerank-btn').addEventListener('click', async () => {
+  if (!lastResults.length) {
+    errorArea.textContent = '请先执行检索';
+    errorArea.classList.remove('hidden');
+    return;
+  }
+  errorArea.classList.add('hidden');
+  try {
+    const resp = await fetch('/rerank', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        query: document.getElementById('query').value,
+        documents: lastResults.map(r => r.content),
+        top_k: lastResults.length,
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok || data.code !== 'OK') throw new Error(data.message || `HTTP ${resp.status}`);
+    const reranked = data.data.results || [];
+    document.getElementById('result-count').textContent = `· 重排后 ${reranked.length} 条`;
+    const warning = data.warning ? `<span class="text-amber-600">warning=${escapeHtml(data.warning)}</span>` : '';
+    document.getElementById('result-meta').innerHTML = `rerank${warning ? ' · ' + warning : ''}`;
+    const list = document.getElementById('result-list');
+    list.innerHTML = reranked.map((r, i) => `
+      <div class="bg-white rounded-lg shadow border border-slate-100 p-4">
+        <div class="flex items-center gap-3 text-xs text-slate-500 mb-2">
+          <span class="text-indigo-600 font-mono">#${i+1}</span>
+          <span>score <strong class="text-slate-800">${r.score.toFixed(4)}</strong></span>
+          <span>original_index ${r.original_index}</span>
+        </div>
+        <div class="text-sm whitespace-pre-wrap break-words">${escapeHtml(r.content)}</div>
+      </div>
+    `).join('');
+  } catch (err) {
+    errorArea.textContent = '重排失败：' + err.message;
+    errorArea.classList.remove('hidden');
+  }
+});
+</script>
+{% endblock %}

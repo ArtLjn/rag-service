@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold">Collections</h1>
+  <a href="/docs#/collections/create_collection_endpoint" target="_blank" class="text-sm text-indigo-600 hover:underline">+ 新建（API）</a>
+</div>
+
+{% if collections %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {% for c in collections %}
+  <a href="/ui/collections/{{ c.name }}" class="block bg-white rounded-lg shadow hover:shadow-md transition p-5 border border-slate-100">
+    <div class="flex items-center justify-between mb-2">
+      <h2 class="text-lg font-semibold text-slate-900 truncate">{{ c.name }}</h2>
+      <span class="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">{{ c.status }}</span>
+    </div>
+    <div class="flex gap-6 text-sm text-slate-600">
+      <div><span class="text-slate-400">points</span> · <span class="font-mono font-medium">{{ c.points_count or 0 }}</span></div>
+      <div><span class="text-slate-400">vectors</span> · <span class="font-mono font-medium">{{ c.vectors_count or 0 }}</span></div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="bg-white rounded-lg shadow p-12 text-center text-slate-500">
+  <p class="mb-3">还没有 collection</p>
+  <pre class="text-xs bg-slate-50 inline-block p-3 rounded">curl -X POST http://localhost:8001/collections \
+  -H "Content-Type: application/json" \
+  -d '{"name":"ticket_knowledge","vector_dim":3072,"distance":"Cosine"}'</pre>
+</div>
+{% endif %}
+{% endblock %}

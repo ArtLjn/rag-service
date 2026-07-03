@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Health</h1>
+
+<div class="bg-white rounded-lg shadow p-6">
+  <div class="flex items-center gap-3 mb-6">
+    <span class="text-3xl">
+      {% if health.status == "ok" %}✅{% else %}⚠️{% endif %}
+    </span>
+    <div>
+      <div class="text-xl font-bold {% if health.status == 'ok' %}text-emerald-700{% else %}text-amber-700{% endif %}">{{ health.status }}</div>
+      {% if health.warning %}<div class="text-xs text-amber-600">{{ health.warning }}</div>{% endif %}
+    </div>
+  </div>
+
+  <h2 class="text-sm font-semibold uppercase text-slate-500 mb-3">Components</h2>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    {% for name, status in health.components.items() %}
+    <div class="border rounded-lg p-4">
+      <div class="flex items-center justify-between mb-1">
+        <span class="font-mono text-sm">{{ name }}</span>
+        {% if status == "ok" %}
+        <span class="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">ok</span>
+        {% elif status == "loading" %}
+        <span class="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700">loading</span>
+        {% else %}
+        <span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">{{ status }}</span>
+        {% endif %}
+      </div>
+      <div class="text-xs text-slate-500">
+        {% if name == "qdrant" %}向量库连通性{% endif %}
+        {% if name == "embedder" %}Google gemini-embedding-001{% endif %}
+        {% if name == "reranker" %}BAAI/bge-reranker-v2-m3{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

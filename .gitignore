@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# 环境/凭证（不提交）
+.env
+.env.*
+!.env.example
+
+# 系统
+.DS_Store
+
+# 测试/lint 缓存
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 运行时数据
+data/
+*.db
+*.db-journal
+*.log
+logs/
+
+# FlashRank / HuggingFace 模型缓存
+data/flashrank_cache/
+.opt-hf-cache/
+
+# fixtures 中测试文件
+fixtures/*.pdf
+fixtures/*.png
+fixtures/*.jpg
+!fixtures/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
