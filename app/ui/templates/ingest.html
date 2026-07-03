@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold mb-2">入库新文档</h1>
+  <p class="text-sm text-slate-500">支持 PDF / Markdown / 纯文本；解析后写入 Qdrant 指定 collection。</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- 左：表单 -->
+  <div class="lg:col-span-2 bg-white rounded-lg shadow p-6">
+    <form id="ingest-form" class="space-y-5" enctype="multipart/form-data">
+      <div>
+        <label class="block text-sm font-medium mb-1">目标 Collection</label>
+        <select name="collection" required class="w-full border rounded px-3 py-2 text-sm">
+          {% if collections %}
+            {% for c in collections %}<option value="{{ c.name }}">{{ c.name }}（{{ c.points_count or 0 }} points）</option>{% endfor %}
+          {% else %}
+            <option value="">（请先创建 collection）</option>
+          {% endif %}
+        </select>
+        {% if not collections %}
+          <p class="text-xs text-amber-600 mt-1">⚠ 还没有 collection，<a href="/ui/collections/new" class="underline">先去创建一个</a>。</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium mb-1">文档来源（二选一）</label>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="border-2 border-dashed rounded p-4 text-center hover:border-indigo-400 transition cursor-pointer" id="drop-zone">
+            <input type="file" name="file" id="file-input"
+              accept=".pdf,.md,.markdown,.txt,.markdown"
+              class="hidden">
+            <div class="text-slate-400 text-sm mb-1">📁 上传文件</div>
+            <div class="text-xs text-slate-500" id="file-name">PDF / MD / TXT（≤ 50 MB）</div>
+          </div>
+          <div>
+            <textarea name="text" rows="5" placeholder="或粘贴文本..."
+              class="w-full border rounded px-3 py-2 text-sm font-mono"></textarea>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">提示：file 与 text 二选一；file 优先。</p>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-sm font-medium mb-1">分块策略</label>
+          <select name="strategy" class="w-full border rounded px-3 py-2 text-sm">
+            <option value="">（按 file_type 自动）</option>
+            <option value="structure_aware">structure_aware（PDF 推荐）</option>
+            <option value="semantic">semantic（Markdown）</option>
+            <option value="fixed">fixed（TXT）</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">file_type（覆盖自动推断）</label>
+          <select name="file_type" class="w-full border rounded px-3 py-2 text-sm">
+            <option value="">（按文件名后缀）</option>
+            <option value="pdf">pdf</option>
+            <option value="md">md</option>
+            <option value="txt">txt</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">来源标记（可选）</label>
+          <input type="text" name="source" placeholder="如 ticket-manual.pdf"
+            class="w-full border rounded px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      <div class="pt-2">
+        <button type="submit"
+          class="bg-indigo-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300"
+          {% if not collections %}disabled{% endif %}>
+          ▶ 开始入库
+        </button>
+        <span id="status" class="text-sm text-slate-500 ml-3"></span>
+      </div>
+    </form>
+  </div>
+
+  <!-- 右：流程说明 + 结果 -->
+  <div class="space-y-4">
+    <div class="bg-white rounded-lg shadow p-5">
+      <h3 class="text-sm font-semibold mb-3 text-slate-700">入库流水线</h3>
+      <ol class="text-xs text-slate-600 space-y-2 list-decimal list-inside">
+        <li>解析（MinerU 在线 / PyMuPDF 降级）</li>
+        <li>分块（按策略合并 + 元数据清洗）</li>
+        <li>Embedding（Google gemini-embedding-001）</li>
+        <li>写入 Qdrant + SQLite 元数据</li>
+        <li>记录 version_history（增量更新）</li>
+      </ol>
+    </div>
+    <div class="bg-white rounded-lg shadow p-5">
+      <h3 class="text-sm font-semibold mb-3 text-slate-700">结果</h3>
+      <div id="result" class="text-xs text-slate-500">提交后此处显示 doc_id / chunk_count / 耗时。</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const fileName = document.getElementById('file-name');
+const form = document.getElementById('ingest-form');
+const status = document.getElementById('status');
+const result = document.getElementById('result');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-indigo-500'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-indigo-500'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('border-indigo-500');
+  if (e.dataTransfer.files.length) {
+    fileInput.files = e.dataTransfer.files;
+    fileName.textContent = e.dataTransfer.files[0].name;
+    fileName.classList.add('text-indigo-600', 'font-medium');
+  }
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) {
+    fileName.textContent = fileInput.files[0].name;
+    fileName.classList.add('text-indigo-600', 'font-medium');
+  }
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  if (!fd.get('collection')) { alert('请选择目标 collection'); return; }
+  if (!fd.get('file')?.name && !fd.get('text')?.trim()) {
+    alert('请上传文件或粘贴文本（二选一）');
+    return;
+  }
+  const btn = form.querySelector('button[type=submit]');
+  btn.disabled = true;
+  status.textContent = '⏳ 处理中...（首次 Embedding 探测可能 5-10s）';
+  result.innerHTML = '<div class="animate-pulse">解析 + 分块 + Embedding + 写入 Qdrant...</div>';
+  const t0 = performance.now();
+  try {
+    const resp = await fetch('/ingest', { method: 'POST', body: fd });
+    const data = await resp.json();
+    const dur = ((performance.now() - t0) / 1000).toFixed(1);
+    if (data.code === 'OK') {
+      const d = data.data;
+      status.innerHTML = `<span class="text-emerald-600">✓ 成功（${dur}s）</span>`;
+      result.innerHTML = `
+        <div class="space-y-1.5">
+          <div><span class="text-slate-400">doc_id:</span> <code class="font-mono text-indigo-600">${d.doc_id}</code></div>
+          <div><span class="text-slate-400">chunk_count:</span> <span class="font-medium">${d.chunk_count}</span></div>
+          <div><span class="text-slate-400">action:</span> <span class="font-medium">${d.action}</span></div>
+          ${data.warning ? `<div class="text-amber-600">⚠ ${data.warning}</div>` : ''}
+          <div class="pt-2">
+            <a href="/ui/collections/${d.collection}/documents/${d.doc_id}" class="text-indigo-600 underline">→ 查看 chunks</a>
+          </div>
+        </div>`;
+    } else {
+      status.innerHTML = `<span class="text-rose-600">✗ 失败（${dur}s）</span>`;
+      result.innerHTML = `<div class="text-rose-600">${data.message}</div><div class="text-xs mt-1">error_code: ${data.error_code}</div>`;
+    }
+  } catch (err) {
+    status.innerHTML = `<span class="text-rose-600">✗ 网络错误</span>`;
+    result.innerHTML = `<div class="text-rose-600">${err}</div>`;
+  } finally {
+    btn.disabled = !document.querySelector('select[name=collection] option');
+  }
+});
+</script>
+{% endblock %}

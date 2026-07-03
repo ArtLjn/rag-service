@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold mb-2">新建 Collection</h1>
+  <p class="text-sm text-slate-500">在 Qdrant 中创建一个独立向量空间，用于存放一类文档。</p>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white rounded-lg shadow p-6">
+    <form id="create-form" class="space-y-5">
+      <div>
+        <label class="block text-sm font-medium mb-1">Collection 名</label>
+        <input type="text" name="name" required pattern="[a-zA-Z0-9_\-]+" placeholder="如 ticket_knowledge / product_docs"
+          class="w-full border rounded px-3 py-2 text-sm font-mono">
+        <p class="text-xs text-slate-400 mt-1">仅字母/数字/下划线/连字符</p>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm font-medium mb-1">向量维度</label>
+          <input type="number" name="vector_dim" value="3072" min="1" max="8192"
+            class="w-full border rounded px-3 py-2 text-sm">
+          <p class="text-xs text-slate-400 mt-1">默认 3072（gemini-embedding-001）</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">距离度量</label>
+          <select name="distance" class="w-full border rounded px-3 py-2 text-sm">
+            <option value="Cosine" selected>Cosine（推荐）</option>
+            <option value="Euclid">Euclid（L2）</option>
+            <option value="Dot">Dot（内积）</option>
+          </select>
+        </div>
+      </div>
+      <div class="pt-2">
+        <button type="submit"
+          class="bg-indigo-600 text-white px-5 py-2 rounded text-sm font-medium hover:bg-indigo-700">
+          ▶ 创建
+        </button>
+        <span id="status" class="text-sm ml-3"></span>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white rounded-lg shadow p-5">
+    <h3 class="text-sm font-semibold mb-3 text-slate-700">命名建议</h3>
+    <ul class="text-xs text-slate-600 space-y-2">
+      <li>📌 <code class="bg-slate-50 px-1">ticket_knowledge</code> — 工单知识库（错误码、SOP）</li>
+      <li>📌 <code class="bg-slate-50 px-1">product_docs</code> — 产品手册（PDF）</li>
+      <li>📌 <code class="bg-slate-50 px-1">policy_docs</code> — 运维规范、政策</li>
+      <li>📌 <code class="bg-slate-50 px-1">pdf_chunks</code> / <code>md_chunks</code> — 按文件类型切（论文实验对比）</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const form = document.getElementById('create-form');
+const status = document.getElementById('status');
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(form);
+  const payload = {
+    name: fd.get('name'),
+    vector_dim: parseInt(fd.get('vector_dim'), 10),
+    distance: fd.get('distance'),
+  };
+  status.textContent = '⏳ 创建中...';
+  try {
+    const resp = await fetch('/collections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (data.code === 'OK') {
+      status.innerHTML = `<span class="text-emerald-600">✓ 已创建（vector_dim=${data.data.vector_dim}）</span>`;
+      setTimeout(() => window.location.href = `/ui/collections/${payload.name}`, 800);
+    } else {
+      status.innerHTML = `<span class="text-rose-600">✗ ${data.message}</span>`;
+    }
+  } catch (err) {
+    status.innerHTML = `<span class="text-rose-600">✗ ${err}</span>`;
+  }
+});
+</script>
+{% endblock %}

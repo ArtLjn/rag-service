@@ -39,6 +39,18 @@ async def index(request: Request) -> HTMLResponse:
     )
 
 
+@router.get("/collections/new", response_class=HTMLResponse)
+async def collection_new_form(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "collection_new.html",
+        {
+            "title": "新建 Collection",
+            "collections": collection_service.list_all(),
+        },
+    )
+
+
 @router.get("/collections/{name}", response_class=HTMLResponse)
 async def collection_detail(
     request: Request,
@@ -114,6 +126,17 @@ async def retrieve_debug(request: Request) -> HTMLResponse:
         },
     )
 
+
+@router.get("/ingest", response_class=HTMLResponse)
+async def ingest_form(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "ingest.html",
+        {
+            "title": "入库新文档",
+            "collections": collection_service.list_all(),
+        },
+    )
 
 @router.get("/health", response_class=HTMLResponse)
 async def health_visualize(request: Request) -> HTMLResponse:

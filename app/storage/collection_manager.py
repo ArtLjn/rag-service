@@ -101,12 +101,29 @@ def list_collections() -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for entry in response.collections:
         info = _safe_call(client.get_collection, entry.name)
+        # 从 vectors_config 提取维度与距离度量
+        vector_dim = None
+        distance = None
+        try:
+            params = info.config.params.vectors
+            if hasattr(params, "size"):
+                vector_dim = params.size
+                distance = str(params.distance).split(".")[-1] if params.distance else None
+            elif isinstance(params, dict):
+                # 多向量配置（dense + sparse），取第一个 dense
+                first = next(iter(params.values()))
+                vector_dim = getattr(first, "size", None)
+                distance = str(getattr(first, "distance", "")).split(".")[-1] or None
+        except Exception:
+            pass
         result.append(
             {
                 "name": entry.name,
                 "vectors_count": getattr(info, "vectors_count", None),
                 "points_count": getattr(info, "points_count", None),
                 "status": str(info.status) if info.status else None,
+                "vector_dim": vector_dim,
+                "distance": distance,
             }
         )
     return result
