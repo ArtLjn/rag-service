@@ -28,6 +28,10 @@
         <a href="/ui/collections/new" class="hover:text-slate-300">新建 Collection</a>
         <a href="/ui/retrieve" class="hover:text-slate-300">检索调试</a>
         <a href="/ui/health" class="hover:text-slate-300">健康</a>
+        {% if request.state.auth_method is defined %}
+        <span class="text-xs text-slate-400 ml-4">{{ request.state.username or 'api_key' }}</span>
+        <a href="/ui/logout" class="text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded">登出</a>
+        {% endif %}
         <a href="/docs" class="hover:text-slate-300 ml-auto">Swagger →</a>
       </div>
     </div>

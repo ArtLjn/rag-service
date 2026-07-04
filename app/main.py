@@ -42,6 +42,8 @@ from app.api import (
     rerank_router,
     retrieve_router,
 )
+from app.api.auth import router as auth_router
+from app.auth.middleware import AuthMiddleware
 from app.core.config import settings
 from app.core.exceptions import RagServiceError
 from app.core.logging import logger
@@ -85,8 +87,16 @@ def create_app() -> FastAPI:
 
     # 请求日志中间件：注入 request_id + 记录 method/path/status/duration
     app.add_middleware(RequestLoggingMiddleware)
+    # 鉴权中间件（白名单放行 /health /docs /ui/login 等，其他路径校验 X-API-Key 或 session）
+    if settings.auth_enabled:
+        app.add_middleware(AuthMiddleware)
+        logger.info(
+            f"auth enabled: api_key={'on' if settings.auth_api_key else 'off'} "
+            f"user={settings.auth_username} session_ttl={settings.auth_session_ttl_hours}h"
+        )
 
     app.include_router(health_router)
+    app.include_router(auth_router)
     app.include_router(parse_router)
     app.include_router(ingest_router)
     app.include_router(retrieve_router)

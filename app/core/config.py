@@ -100,6 +100,20 @@ class Settings(BaseSettings):
     log_backtrace: bool = Field(default=True, alias="LOG_BACKTRACE")
     slow_request_ms: float = Field(default=2000.0, alias="SLOW_REQUEST_MS")  # 慢请求阈值
 
+    # ---- 鉴权（毕设场景双层：API Key 服务间 + 用户密码 UI） ----
+    # auth_enabled=false 时全部公开（仅本地开发用）
+    # auth_enabled=true 时：
+    #   - /health  公开（健康检查）
+    #   - /docs    公开（Swagger，生产可关）
+    #   - /ui/login /api/auth/login  公开
+    #   - 其他路径需要：X-API-Key 头 OR 登录 session cookie
+    auth_enabled: bool = Field(default=False, alias="AUTH_ENABLED")
+    auth_api_key: str | None = Field(default=None, alias="AUTH_API_KEY")  # 服务间调用用
+    auth_username: str = Field(default="admin", alias="AUTH_USERNAME")
+    auth_password_hash: str | None = Field(default=None, alias="AUTH_PASSWORD_HASH")  # bcrypt
+    auth_session_secret: str | None = Field(default=None, alias="AUTH_SESSION_SECRET")  # itsdangerous 签名密钥
+    auth_session_ttl_hours: int = Field(default=24, alias="AUTH_SESSION_TTL_HOURS")
+
     # HyDE LLM（OpenAI 兼容；默认未配置）
     hyde_enabled_by_default: bool = Field(default=False, alias="HYDE_ENABLED_BY_DEFAULT")
     hyde_llm_base_url: str | None = Field(default=None, alias="HYDE_LLM_BASE_URL")
