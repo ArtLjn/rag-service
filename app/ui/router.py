@@ -117,12 +117,13 @@ async def document_chunks(request: Request, name: str, doc_id: str) -> HTMLRespo
 
 @router.get("/retrieve", response_class=HTMLResponse)
 async def retrieve_debug(request: Request) -> HTMLResponse:
+    collections = _prefer_ticket_knowledge(collection_service.list_all())
     return templates.TemplateResponse(
         request,
         "retrieve.html",
         {
             "title": "检索调试器",
-            "collections": collection_service.list_all(),
+            "collections": collections,
         },
     )
 
@@ -137,6 +138,7 @@ async def ingest_form(request: Request) -> HTMLResponse:
             "collections": collection_service.list_all(),
         },
     )
+
 
 @router.get("/health", response_class=HTMLResponse)
 async def health_visualize(request: Request) -> HTMLResponse:
@@ -169,6 +171,13 @@ def _sort_chunks(points: list[Any]) -> list[dict[str, Any]]:
         )
     items.sort(key=lambda c: (c.get("logic_idx") if c.get("logic_idx") is not None else 99999, c.get("page") or 0, c["chunk_index"]))
     return items
+
+
+def _prefer_ticket_knowledge(collections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        collections,
+        key=lambda item: (0 if item.get("name") == "ticket_knowledge" else 1, item.get("name") or ""),
+    )
 
 
 __all__ = ["router", "templates"]

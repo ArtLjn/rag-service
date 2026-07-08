@@ -72,6 +72,18 @@ def test_retrieve_debug_page_renders(client: TestClient) -> None:
     assert "ticket_knowledge" in response.text
 
 
+def test_retrieve_debug_prefers_ticket_knowledge_first(client: TestClient) -> None:
+    with patch("app.ui.router.collection_service.list_all") as mock_list:
+        mock_list.return_value = [
+            {"name": "knowledge_base", "points_count": 1, "status": "green"},
+            {"name": "ticket_knowledge", "points_count": 1, "status": "green"},
+        ]
+        response = client.get("/ui/retrieve")
+
+    assert response.status_code == 200
+    assert response.text.find('value="ticket_knowledge"') < response.text.find('value="knowledge_base"')
+
+
 def test_health_page_renders(client: TestClient) -> None:
     with patch("app.ui.router.check_health") as mock_health:
         from app.core.response import HealthResponse
