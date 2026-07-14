@@ -81,6 +81,75 @@ def delete_document(collection: str, doc_id: str, store: MetadataStore | None = 
     }
 
 
+def delete_documents(collection: str, doc_ids: list[str], store: MetadataStore | None = None) -> dict[str, Any]:
+    """批量删除文档；单个 doc 失败不会中断后续删除。"""
+    if not collection_exists(collection):
+        raise CollectionNotFound(f"collection {collection} not found")
+
+    store = store or MetadataStore()
+    unique_doc_ids = _dedupe_doc_ids(doc_ids)
+    results: list[dict[str, Any]] = []
+    deleted = 0
+    failed = 0
+    points_removed_total = 0
+
+    for doc_id in unique_doc_ids:
+        existing = store.get_document(doc_id, collection)
+        if not existing:
+            failed += 1
+            results.append(
+                {
+                    "doc_id": doc_id,
+                    "status": "not_found",
+                    "metadata_removed": False,
+                    "points_removed": 0,
+                    "error": f"document {doc_id} not found in collection {collection}",
+                }
+            )
+            continue
+
+        try:
+            points_removed = delete_document_points(collection, doc_id)
+            metadata_removed = store.delete_document(doc_id, collection)
+        except Exception as exc:
+            failed += 1
+            results.append(
+                {
+                    "doc_id": doc_id,
+                    "status": "failed",
+                    "metadata_removed": False,
+                    "points_removed": 0,
+                    "error": str(exc),
+                }
+            )
+            continue
+
+        deleted += 1
+        points_removed_total += points_removed
+        results.append(
+            {
+                "doc_id": doc_id,
+                "status": "deleted",
+                "metadata_removed": metadata_removed,
+                "points_removed": points_removed,
+                "error": None,
+            }
+        )
+
+    logger.info(
+        f"bulk deleted documents from {collection}: requested={len(unique_doc_ids)} "
+        f"deleted={deleted} failed={failed} points={points_removed_total}"
+    )
+    return {
+        "collection": collection,
+        "requested": len(unique_doc_ids),
+        "deleted": deleted,
+        "failed": failed,
+        "points_removed": points_removed_total,
+        "results": results,
+    }
+
+
 def prune_orphan_points(collection: str, *, dry_run: bool = False, store: MetadataStore | None = None) -> dict[str, Any]:
     """删除 Qdrant 中已无 SQLite metadata 对应记录的孤儿 points。"""
     if not collection_exists(collection):
@@ -150,6 +219,18 @@ def _load_visible_doc_ids(collection: str, store: MetadataStore) -> set[str]:
     return visible
 
 
+def _dedupe_doc_ids(doc_ids: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for doc_id in doc_ids:
+        normalized = str(doc_id).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
+
+
 def _active_embedding_model() -> str:
     from app.core.config import settings
 
@@ -164,6 +245,7 @@ __all__ = [
     "client",
     "create",
     "delete_document",
+    "delete_documents",
     "list_all",
     "list_documents",
     "prune_orphan_points",

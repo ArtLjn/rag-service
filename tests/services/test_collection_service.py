@@ -103,6 +103,54 @@ def test_delete_document_keeps_metadata_when_qdrant_delete_fails(tmp_path) -> No
     assert store.get_document("d1", "c1") is not None
 
 
+def test_delete_documents_bulk_deletes_each_document(tmp_path) -> None:
+    from datetime import datetime
+
+    from app.models.document import DocumentRecord
+    from app.storage.metadata_store import MetadataStore
+
+    store = MetadataStore(db_path=str(tmp_path / "bulk.db"))
+    store.init_schema()
+    for doc_id in ("d1", "d2"):
+        store.upsert_document(
+            DocumentRecord(
+                doc_id=doc_id,
+                collection="c1",
+                chunk_count=1,
+                content_hash=doc_id,
+                ingested_at=datetime.utcnow(),
+            )
+        )
+
+    with patch("app.services.collection_service.collection_exists", return_value=True), \
+         patch("app.services.collection_service.MetadataStore", return_value=store), \
+         patch("app.services.collection_service.delete_document_points", side_effect=[2, 3]):
+        result = collection_service.delete_documents("c1", ["d1", "d2"])
+
+    assert result["requested"] == 2
+    assert result["deleted"] == 2
+    assert result["points_removed"] == 5
+    assert [item["doc_id"] for item in result["results"]] == ["d1", "d2"]
+    assert store.get_document("d1", "c1") is None
+    assert store.get_document("d2", "c1") is None
+
+
+def test_delete_documents_bulk_reports_missing_without_stopping(tmp_path) -> None:
+    from app.storage.metadata_store import MetadataStore
+
+    store = MetadataStore(db_path=str(tmp_path / "bulk_missing.db"))
+    store.init_schema()
+
+    with patch("app.services.collection_service.collection_exists", return_value=True), \
+         patch("app.services.collection_service.MetadataStore", return_value=store):
+        result = collection_service.delete_documents("c1", ["missing"])
+
+    assert result["requested"] == 1
+    assert result["deleted"] == 0
+    assert result["failed"] == 1
+    assert result["results"][0]["status"] == "not_found"
+
+
 def test_prune_orphan_points_removes_points_without_metadata(tmp_path) -> None:
     from datetime import datetime
 

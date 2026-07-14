@@ -19,6 +19,10 @@ class CreateCollectionBody(BaseModel):
     distance: str = "Cosine"
 
 
+class BatchDeleteDocumentsBody(BaseModel):
+    doc_ids: list[str]
+
+
 @router.post("")
 async def create_collection_endpoint(body: CreateCollectionBody) -> ApiResponse[dict[str, Any]]:
     result = collection_service.create(body.name, vector_dim=body.vector_dim, distance=body.distance)
@@ -53,6 +57,14 @@ async def list_documents_endpoint(
     return ApiResponse.ok(result)
 
 
+@router.post("/{name}/documents:batch-delete")
+async def batch_delete_documents_endpoint(
+    name: str,
+    body: BatchDeleteDocumentsBody,
+) -> ApiResponse[dict[str, Any]]:
+    return ApiResponse.ok(collection_service.delete_documents(name, body.doc_ids))
+
+
 @router.delete("/{name}/documents/{doc_id}")
 async def delete_document_endpoint(name: str, doc_id: str) -> ApiResponse[dict[str, Any]]:
     return ApiResponse.ok(collection_service.delete_document(name, doc_id))
@@ -60,6 +72,8 @@ async def delete_document_endpoint(name: str, doc_id: str) -> ApiResponse[dict[s
 
 __all__ = [
     "CreateCollectionBody",
+    "BatchDeleteDocumentsBody",
+    "batch_delete_documents_endpoint",
     "create_collection_endpoint",
     "delete_collection_endpoint",
     "delete_document_endpoint",

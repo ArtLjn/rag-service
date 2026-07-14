@@ -69,6 +69,23 @@ def test_delete_document(client: TestClient) -> None:
     assert response.json()["data"]["points_removed"] == 5
 
 
+def test_delete_documents_bulk(client: TestClient) -> None:
+    with patch("app.api.collections.collection_service.delete_documents") as mock_delete:
+        mock_delete.return_value = {
+            "collection": "c1",
+            "requested": 2,
+            "deleted": 2,
+            "failed": 0,
+            "points_removed": 5,
+            "results": [],
+        }
+        response = client.post("/collections/c1/documents:batch-delete", json={"doc_ids": ["d1", "d2"]})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["deleted"] == 2
+    mock_delete.assert_called_once_with("c1", ["d1", "d2"])
+
+
 def test_prune_orphan_points(client: TestClient) -> None:
     with patch("app.api.collections.collection_service.prune_orphan_points") as mock_prune:
         mock_prune.return_value = {

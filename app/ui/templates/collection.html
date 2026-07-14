@@ -7,11 +7,13 @@
       <h1 class="text-2xl font-bold">{{ name }}</h1>
       <p class="text-xs text-slate-500 mt-1">vector_dim: <code class="bg-slate-50 px-1">{{ vector_dim or '?' }}</code> · distance: <code class="bg-slate-50 px-1">{{ distance or '?' }}</code></p>
     </div>
-	    <div class="flex gap-3 items-center">
-	      <button id="prune-orphans" data-collection="{{ name }}"
-	              class="bg-white border border-slate-200 px-3 py-1.5 rounded text-sm text-slate-600 hover:bg-slate-50">清理残留向量</button>
-	      <a href="/ui/ingest"
-	         class="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700">+ 入库到本 collection</a>
+    <div class="flex gap-3 items-center">
+      <button id="bulk-delete" data-collection="{{ name }}"
+              class="bg-white border border-rose-200 px-3 py-1.5 rounded text-sm text-rose-600 hover:bg-rose-50">批量删除</button>
+      <button id="prune-orphans" data-collection="{{ name }}"
+              class="bg-white border border-slate-200 px-3 py-1.5 rounded text-sm text-slate-600 hover:bg-slate-50">清理残留向量</button>
+      <a href="/ui/ingest"
+         class="bg-indigo-600 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-700">+ 入库到本 collection</a>
       <div class="text-xs text-slate-500">
         <span>共 <strong class="text-slate-800">{{ total }}</strong> 文档</span>
         <span class="ml-2">第 {{ page }} / {{ total_pages }} 页</span>
@@ -25,6 +27,7 @@
   <table class="min-w-full text-sm">
     <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
       <tr>
+        <th class="text-left px-4 py-3 w-10"><input id="select-all-docs" type="checkbox"></th>
         <th class="text-left px-4 py-3">doc_id</th>
         <th class="text-left px-4 py-3">source</th>
         <th class="text-left px-4 py-3">category</th>
@@ -35,7 +38,8 @@
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for d in documents %}
-      <tr class="hover:bg-slate-50 group">
+      <tr class="hover:bg-slate-50 group" data-doc-row="{{ d.doc_id }}">
+        <td class="px-4 py-3"><input class="doc-select" type="checkbox" value="{{ d.doc_id }}"></td>
         <td class="px-4 py-3 font-mono text-xs">{{ d.doc_id }}</td>
         <td class="px-4 py-3">{{ d.source or "—" }}</td>
         <td class="px-4 py-3 text-slate-500">{{ d.category or "—" }}</td>
@@ -69,33 +73,82 @@
 {% endblock %}
 
 {% block scripts %}
-	<script>
-	const pruneBtn = document.getElementById('prune-orphans');
-	if (pruneBtn) {
-	  pruneBtn.addEventListener('click', async () => {
-	    const collection = pruneBtn.dataset.collection;
-	    if (!confirm(`确认清理 collection "${collection}" 中没有文档元数据对应的残留向量？\n\n该操作会删除 Qdrant 中的孤儿 points。`)) return;
-	    const originalText = pruneBtn.textContent;
-	    pruneBtn.disabled = true;
-	    pruneBtn.textContent = '清理中...';
-	    try {
-	      const resp = await fetch(`/collections/${collection}/prune-orphans`, { method: 'POST' });
-	      const data = await resp.json();
-	      if (data.code === 'OK') {
-	        alert(`✓ 已清理 ${data.data.points_removed} 个残留 point\n孤儿 doc_id: ${data.data.orphan_doc_ids.join(', ') || '无'}`);
-	      } else {
-	        alert(`✗ ${data.message}`);
-	      }
-	    } catch (err) {
-	      alert(`✗ ${err}`);
-	    } finally {
-	      pruneBtn.disabled = false;
-	      pruneBtn.textContent = originalText;
-	    }
-	  });
-	}
+<script>
+const selectAll = document.getElementById('select-all-docs');
+if (selectAll) {
+  selectAll.addEventListener('change', () => {
+    document.querySelectorAll('.doc-select').forEach(input => {
+      input.checked = selectAll.checked;
+    });
+  });
+}
 
-	document.querySelectorAll('.del-doc').forEach(btn => {
+const bulkDeleteBtn = document.getElementById('bulk-delete');
+if (bulkDeleteBtn) {
+  bulkDeleteBtn.addEventListener('click', async () => {
+    const collection = bulkDeleteBtn.dataset.collection;
+    const selected = Array.from(document.querySelectorAll('.doc-select:checked')).map(input => input.value);
+    if (!selected.length) {
+      alert('请先选择要删除的文档');
+      return;
+    }
+    if (!confirm(`确认批量删除 ${selected.length} 个文档？\n\n将清理对应 chunks + 元数据，此操作不可撤销！`)) return;
+    const originalText = bulkDeleteBtn.textContent;
+    bulkDeleteBtn.disabled = true;
+    bulkDeleteBtn.textContent = '删除中...';
+    try {
+      const resp = await fetch(`/collections/${collection}/documents:batch-delete`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({doc_ids: selected}),
+      });
+      const data = await resp.json();
+      if (data.code === 'OK') {
+        data.data.results
+          .filter(item => item.status === 'deleted')
+          .forEach(item => {
+            const row = document.querySelector(`[data-doc-row="${CSS.escape(item.doc_id)}"]`);
+            if (row) row.remove();
+          });
+        alert(`✓ 已删除 ${data.data.deleted} 个文档，清理 ${data.data.points_removed} 个 point，失败 ${data.data.failed} 个`);
+      } else {
+        alert(`✗ ${data.message}`);
+      }
+    } catch (err) {
+      alert(`✗ ${err}`);
+    } finally {
+      bulkDeleteBtn.disabled = false;
+      bulkDeleteBtn.textContent = originalText;
+    }
+  });
+}
+
+const pruneBtn = document.getElementById('prune-orphans');
+if (pruneBtn) {
+  pruneBtn.addEventListener('click', async () => {
+    const collection = pruneBtn.dataset.collection;
+    if (!confirm(`确认清理 collection "${collection}" 中没有文档元数据对应的残留向量？\n\n该操作会删除 Qdrant 中的孤儿 points。`)) return;
+    const originalText = pruneBtn.textContent;
+    pruneBtn.disabled = true;
+    pruneBtn.textContent = '清理中...';
+    try {
+      const resp = await fetch(`/collections/${collection}/prune-orphans`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.code === 'OK') {
+        alert(`✓ 已清理 ${data.data.points_removed} 个残留 point\n孤儿 doc_id: ${data.data.orphan_doc_ids.join(', ') || '无'}`);
+      } else {
+        alert(`✗ ${data.message}`);
+      }
+    } catch (err) {
+      alert(`✗ ${err}`);
+    } finally {
+      pruneBtn.disabled = false;
+      pruneBtn.textContent = originalText;
+    }
+  });
+}
+
+document.querySelectorAll('.del-doc').forEach(btn => {
   btn.addEventListener('click', async () => {
     const collection = btn.dataset.collection;
     const doc = btn.dataset.doc;
