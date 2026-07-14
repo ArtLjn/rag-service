@@ -21,6 +21,7 @@ ssh $SSH_OPTS "${REMOTE_HOST}" "mkdir -p ${REMOTE_DIR}/{data,logs}"
 # 2. rsync 同步代码（增量，排除缓存/虚拟环境）
 rsync -avz --delete \
   -e "ssh $SSH_OPTS" \
+  --exclude='.claude/' \
   --exclude='.venv/' \
   --exclude='__pycache__/' \
   --exclude='*.pyc' \
