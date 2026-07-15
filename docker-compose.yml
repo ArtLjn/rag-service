@@ -2,19 +2,18 @@ services:
   quillrag:
     build: .
     container_name: quillrag
+    env_file:
+      - .env
     ports:
       - "8001:8001"
     environment:
       - PORT=8001
       - QDRANT_URL=http://qdrant:6333
-      - EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
-      - RERANKER_MODEL=BAAI/bge-reranker-v2-m3
-      - DEFAULT_CHUNK_SIZE=500
-      - DEFAULT_TOP_K=10
-      - RRF_K=60
-      - RRF_VECTOR_WEIGHT=0.7
-      - RRF_SPARSE_WEIGHT=0.3
-      - HTTP_TIMEOUT=10
+      - METADATA_DB_PATH=/app/data/rag_metadata.db
+      - RERANKER_FLASHRANK_CACHE_DIR=/app/data/flashrank_cache
+    volumes:
+      - quillrag_data:/app/data
+      - hf_cache:/opt/hf-cache
     depends_on:
       qdrant:
         condition: service_healthy
@@ -36,3 +35,5 @@ services:
 
 volumes:
   qdrant_data:
+  quillrag_data:
+  hf_cache:

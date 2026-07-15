@@ -42,6 +42,7 @@ fixtures/*.jpg
 !fixtures/.gitkeep
 
 # IDE
+.claude/
 .idea/
 .vscode/
 *.swp
